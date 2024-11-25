@@ -1,12 +1,14 @@
 ## Towards Accurate Post-Training Quantization of Vision Transformers via Error Reduction (ERQ)
 
-Below are instructions for reproducing the classification results of ERQ. Note that this paper is **extended** from our previous ICML2024 paper: 
+Below are instructions for reproducing the classification results of ERQ. Note that this paper is **extended** from our previous ICML2024 paper:
 
 ERQ: Error Reduction for Post-Training Quantization of Vision Transformers (**spotlight**).
 
-
 Note that we also provide the instructions for reproducing the detection/SR results of ERQ in ERQ_detection.zip/ERQ_SR.zip
 
+## Environment Setup
+
+You can run `bash env_setup.sh` to configure the environment automatically.
 
 ## Evaluation
 
@@ -37,6 +39,26 @@ optional arguments:
 CUDA_VISIBLE_DEVICES=0 python test_quant.py --model deit_small --dataset /data/datasets/ImageNet --w_bit 4 --a_bit 4--calib-batchsize 32 --coe 10000
 ```
 
+## Benchmark
+
+### Linear Module Benchmark
+
+- You can simply run above command to benchmark the performance of Linear module(for FP32, 8bit, and 4bit mode)
+
+  ```
+  export PYTHONPATH=./
+  python benchmark/module_benchmark.py --bsz=<BatchSize> --seq_len=<SequenceLength> --layer_type=<LayerType>
+  ```
+- The `LayerType` can be `v_proj` or `down_proj`.
+
+### Full Vit Model Benchmark
+
+- You can simply run above command to benchmark the performance of Linear module(for FP32, 8bit, and 4bit mode)
+
+  ```
+  export PYTHONPATH=./
+  python benchmark/vit_benchmark.py --model=<ModelType> --val-batchsize=<ValBatchSize>
+  ```
 
 ## Results
 
@@ -45,7 +67,7 @@ Below are the part of classification results on ImageNet dataset.
 
 ## Citation
 
-This code and paper is **extended** from our previous ICML2024 paper: 
+This code and paper is **extended** from our previous ICML2024 paper:
 
 ERQ: Error Reduction for Post-Training Quantization of Vision Transformers (**spotlight**).
 

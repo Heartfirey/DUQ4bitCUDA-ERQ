@@ -20,10 +20,10 @@ num_bench_steps = 100
 
 def dequant_benchamrk(shape):
     matrix = torch.randint(0, 127, shape).cuda().to(torch.int32)
-    fake_row_scales = torch.rand(shape[0]).cuda().to(torch.float16)
-    fake_row_zeros = torch.rand(shape[0]).cuda().to(torch.float16)
-    fake_col_scales = torch.rand(shape[1]).cuda().to(torch.float16)
-    fake_col_zeros = torch.rand(shape[1]).cuda().to(torch.float16)
+    fake_row_scales = torch.rand(shape[0]).cuda()
+    fake_row_zeros = torch.rand(shape[0]).cuda()
+    fake_col_scales = torch.rand(shape[1]).cuda()
+    fake_col_zeros = torch.rand(shape[1]).cuda()
     
     time_dequant_8bit = []
     for i in range(10):
@@ -38,6 +38,11 @@ def dequant_benchamrk(shape):
             time_dequant_8bit.append((end_time - start_time) * 1000 / num_bench_steps)
         print("[bold green]End benchmarking({}/{})...[bold /green]".format(i+1, 10))
     print(f"8bit dequant time: {np.mean(time_dequant_8bit)} ms")
+    
+    fake_row_scales = fake_row_scales.to(torch.float16)
+    fake_row_zeros = fake_row_zeros.to(torch.float16)
+    fake_col_scales = fake_col_scales.to(torch.float16)
+    fake_col_zeros = fake_col_zeros.to(torch.float16)
     
     time_dequant_4bit = []
     for i in range(10):
@@ -56,8 +61,8 @@ def dequant_benchamrk(shape):
 
 
 def quant_benchmark(shapeA, shapeB):
-    matrixA = torch.randint(0, 127, shapeA).cuda().to(torch.float16)
-    matrixB = torch.randint(0, 127, shapeB).cuda().to(torch.float16)
+    matrixA = torch.randint(0, 127, shapeA).cuda().to(torch.float32)
+    matrixB = torch.randint(0, 127, shapeB).cuda().to(torch.float32)
     
     quantizer_a = AsymQuantizer8bit()
     # quantizer_b = AsymQuantizer8bit()
@@ -79,6 +84,9 @@ def quant_benchmark(shapeA, shapeB):
     
     del(quantizer_a)
     
+    matrixA = matrixA.to(torch.float16)
+    matrixB = matrixB.to(torch.float16)
+    
     quantizer_a4b = AsymQuantizer()
     
     time_mm4bit = []
@@ -98,8 +106,8 @@ def quant_benchmark(shapeA, shapeB):
     return np.mean(time_mm8bit), np.mean(time_mm4bit)
 
 def matmul_benchmark(shapeA, shapeB):
-    matrixA = torch.randint(0, 127, shapeA).cuda().to(torch.float16)
-    matrixB = torch.randint(0, 127, shapeB).cuda().to(torch.float16)
+    matrixA = torch.randint(0, 127, shapeA).cuda()
+    matrixB = torch.randint(0, 127, shapeB).cuda()
     
     matrixA_8b = matrixA.to(torch.int8)
     matrixB_8b = matrixB.to(torch.int8)
@@ -121,6 +129,9 @@ def matmul_benchmark(shapeA, shapeB):
     del(matrixA_8b)
     del(matrixB_8b)
     
+    matrixA = matrixA.to(torch.float16)
+    matrixB = matrixB.to(torch.float16)
+    
     matrixA_4b = AsymQuantizer()(matrixA).quantized_x
     matrixB_4b = AsymQuantizer()(matrixB).quantized_x
     
@@ -141,8 +152,8 @@ def matmul_benchmark(shapeA, shapeB):
     
 
 def pipeline_benchmark(shapeA, shapeB):
-    matrixA = torch.randint(0, 127, shapeA).cuda().to(torch.float16)
-    matrixB = torch.randint(0, 127, shapeB).cuda().to(torch.float16)
+    matrixA = torch.randint(0, 127, shapeA).cuda().to(torch.float32)
+    matrixB = torch.randint(0, 127, shapeB).cuda().to(torch.float32)
     
     matrixB_Q8bit = AsymQuantizer8bit()(matrixB)
     
@@ -167,6 +178,9 @@ def pipeline_benchmark(shapeA, shapeB):
     print(f"8bit pipeline time: {sum(time_pp8bit)/len(time_pp8bit)} ms")
     
     del(quantizer_8bit)
+    
+    matrixA = matrixA.to(torch.float16)
+    matrixB = matrixB.to(torch.float16)
     
     matrixB_Q4bit = AsymQuantizer()(matrixB)
     

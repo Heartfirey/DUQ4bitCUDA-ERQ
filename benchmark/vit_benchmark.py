@@ -6,6 +6,7 @@ import pickle
 import time
 import rich
 from rich.progress import track
+from rich.panel import Panel
 
 from lib.qlinear4bit.nn import LinearQuant4bitDUASQ, Linear4bitASQ, LinearQuant8bitASQ
 
@@ -28,7 +29,7 @@ def get_args_parser():
                         help='path to dataset')
     parser.add_argument("--calib-batchsize", default=1024,
                         type=int, help="batchsize of validation set")
-    parser.add_argument("--val-batchsize", default=800,
+    parser.add_argument("--val-batchsize", default=200,
                         type=int, help="batchsize of validation set")
     parser.add_argument("--num-workers", default=16, type=int,
                         help="number of data loading workers (default: 16)")
@@ -174,7 +175,7 @@ def benchmark_model(model, val_loader, device, dtype=torch.float16):
     return total_time, avg_batch_time
 
 def show_results(name, total_time, avg_batch_time):
-    rich.print(rich.panel.Panel(f"[yellow bold]ViT Benchmark - {name}(bs={args.val_batchsize}).[/yellow bold]\n[blue]Average Inference Time: [/blue][green bold]{total_time:.3f} ms[/green bold]\n[magenta]Avergae batch inference time: [/magenta][green bold]{avg_batch_time:.3f} ms[/green bold]", title="Result", expand=False))
+    rich.print(Panel(f"[yellow bold]ViT Benchmark - {name}(bs={args.val_batchsize}).[/yellow bold]\n[blue]Average Inference Time: [/blue][green bold]{total_time:.3f} ms[/green bold]\n[magenta]Avergae batch inference time: [/magenta][green bold]{avg_batch_time:.3f} ms[/green bold]", title="SpeedUP", expand=False))
 
 def main():
     print(args)
@@ -193,23 +194,6 @@ def main():
     fp32_tot, fp32_avg = benchmark_model(model, val_loader, device, dtype=torch.float32)
     
     model.to(torch.float16)
-    model.eval()
-    
-    fp16_tot, fp16_avg = benchmark_model(model, val_loader, device, dtype=torch.float16)
-    
-    wq_params = {'n_bits': args.w_bits, 'channel_wise': True}
-    aq_params = {'n_bits': args.a_bits, 'channel_wise': False}
-    q_model = quant_model_cuda_8bit(model, input_quant_params=aq_params, weight_quant_params=wq_params)
-    q_model.to(device)
-    q_model.eval()
-    
-    int8_tot, int8_avg = benchmark_model(q_model, val_loader, device, dtype=torch.float16)
-    
-    del(model); del(q_model)
-    
-    model = build_model(model_zoo[args.model])
-    model.to(device).to(torch.float16)
-    model.eval()
     
     wq_params = {'n_bits': args.w_bits, 'channel_wise': True}
     aq_params = {'n_bits': args.a_bits, 'channel_wise': False}
@@ -219,10 +203,24 @@ def main():
     
     int4_tot, int4_avg = benchmark_model(q_model, val_loader, device, dtype=torch.float16)
     
+    del(model); del(q_model)
+    
+    model = build_model(model_zoo[args.model])
+    model.eval()
+    
+    wq_params = {'n_bits': args.w_bits, 'channel_wise': True}
+    aq_params = {'n_bits': args.a_bits, 'channel_wise': False}
+    q_model = quant_model_cuda_8bit(model, input_quant_params=aq_params, weight_quant_params=wq_params)
+    q_model.to(device)
+    q_model.eval()
+    
+    int8_tot, int8_avg = benchmark_model(q_model, val_loader, device, dtype=torch.float32)
+    
     show_results(f'{args.model}-FP32', fp32_tot, fp32_avg)
-    show_results(f'{args.model}-FP16', fp16_tot, fp16_avg)
     show_results(f'{args.model}-Int8', int8_tot, int8_avg)
     show_results(f'{args.model}-Int4', int4_tot, int4_avg)
+    
+    rich.print(rich.panel.Panel(f"FP32 -> INT8: {fp32_avg / int8_avg:.4f}x\nINT8 -> INT4: {int8_avg / int4_avg:.4f}x\nFP32 -> INT4: {fp32_avg / int4_avg:.4f}x", title="Speedup", expand=False))
 
     
 
