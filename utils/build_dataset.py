@@ -5,6 +5,32 @@ from PIL import Image
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 
+class RandomNoiseDataset(torch.utils.data.Dataset):
+    def __init__(self, img_size=(3,224,224), num_classes=1000, length=1000):
+        self.size = img_size
+        self.num_classes = num_classes
+        self.length = length
+    
+    def __len__(self):
+        return self.length
+    
+    def __getitem__(self, idx):
+        fake_img = torch.randn(self.size)
+        fake_label = torch.randint(0, self.num_classes, (1,)).item()
+        return fake_img, fake_label
+
+def build_randval_dataset(args):  
+    val_dataset = RandomNoiseDataset(args.fake_image_size, args.fake_num_classes, args.fake_data_len)
+    val_dataloader = torch.utils.data.DataLoader(
+        val_dataset,
+        batch_size=args.val_batchsize,
+        shuffle=False,
+        num_workers=args.num_workers,
+        pin_memory=True
+    )
+    
+    return val_dataloader
+    
 
 def build_dataset(args):
     model_type = args.model.split("_")[0]
