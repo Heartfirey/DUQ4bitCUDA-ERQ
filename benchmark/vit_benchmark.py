@@ -61,7 +61,7 @@ model_zoo = {
     'swin_base': 'swin_base_patch4_window7_224'
 }
 
-def quant_model_cuda_4bit(model, input_quant_params={}, weight_quant_params={}):
+def quant_model_cuda_4bit(model, input_quant_params={}, weight_quant_params={}, use_duq=True):
     # post-softmax
     input_quant_params_matmul2 = deepcopy(input_quant_params)
     input_quant_params_matmul2['log_quant'] = True
@@ -90,7 +90,10 @@ def quant_model_cuda_4bit(model, input_quant_params={}, weight_quant_params={}):
             idx = idx + 1 if idx != 0 else idx
             # if 'qkv' in name or 'fc1' in name or 'reduction' in name:
             if 'qkv' in name or 'fc1' in name:
-                new_m = LinearQuant4bitDUASQ.from_linear(m, require_quantizer=True)
+                if use_duq:
+                    new_m = LinearQuant4bitDUASQ.from_linear(m, require_quantizer=True)
+                else:
+                    new_m = Linear4bitASQ.from_linear(m, require_quantizer=True)
                 rich.print(f"[blue]Find [green bold]QKV-Linear[/green bold]: [yellow]{name}[/yellow], "
                     "using [yellow]'LinearQuant4bit([red]DualUniformAsymQuant[/red])'[/yellow] to quantize...[/blue]")
             else:
@@ -193,17 +196,37 @@ def main():
     
     fp32_tot, fp32_avg = benchmark_model(model, val_loader, device, dtype=torch.float32)
     
+    del(model)
+    
+    model = build_model(model_zoo[args.model])
+    model.to(device)
+    model.eval()
+    wq_params = {'n_bits': args.w_bits, 'channel_wise': True}
+    aq_params = {'n_bits': args.a_bits, 'channel_wise': False}
+    q_model = quant_model_cuda_4bit(model, input_quant_params=aq_params, weight_quant_params=wq_params)
+    q_model.to(device).to(torch.float16)
+    q_model.eval()
+    
+    int4duq_tot, int4duq_avg = benchmark_model(q_model, val_loader, device, dtype=torch.float16)
+    int4duq_tot, int4duq_avg = benchmark_model(q_model, val_loader, device, dtype=torch.float16)
+    
+    del(model); del(q_model)
+    
+    model = build_model(model_zoo[args.model])
+    model.to(device)
+    model.eval()
     model.to(torch.float16)
     
     wq_params = {'n_bits': args.w_bits, 'channel_wise': True}
     aq_params = {'n_bits': args.a_bits, 'channel_wise': False}
-    q_model = quant_model_cuda_4bit(model, input_quant_params=aq_params, weight_quant_params=wq_params)
+    q_model = quant_model_cuda_4bit(model, input_quant_params=aq_params, weight_quant_params=wq_params, use_duq=False)
     q_model.to(device)
     q_model.eval()
     
-    int4_tot, int4_avg = benchmark_model(q_model, val_loader, device, dtype=torch.float16)
+    int4uq_tot, int4uq_avg = benchmark_model(q_model, val_loader, device, dtype=torch.float16)
     
     del(model); del(q_model)
+    
     
     model = build_model(model_zoo[args.model])
     model.eval()
@@ -218,9 +241,10 @@ def main():
     
     show_results(f'{args.model}-FP32', fp32_tot, fp32_avg)
     show_results(f'{args.model}-Int8', int8_tot, int8_avg)
-    show_results(f'{args.model}-Int4', int4_tot, int4_avg)
+    show_results(f'{args.model}-Int4(UQ)', int4uq_tot, int4uq_avg)
+    show_results(f'{args.model}-Int4(DUQ)', int4duq_tot, int4duq_avg)
     
-    rich.print(rich.panel.Panel(f"FP32 -> INT8: {fp32_avg / int8_avg:.4f}x\nINT8 -> INT4: {int8_avg / int4_avg:.4f}x\nFP32 -> INT4: {fp32_avg / int4_avg:.4f}x", title="Speedup", expand=False))
+    rich.print(rich.panel.Panel(f"FP32 -> INT8: {fp32_avg / int8_avg:.4f}x\nINT8 -> INT4(UQ): {int8_avg / int4uq_avg:.4f}x\nFP32 -> INT4(UQ): {fp32_avg / int4uq_avg:.4f}x\nINT8 -> INT4(DUQ): {int8_avg / int4duq_avg:.4f}x\nFP32 -> INT4(DUQ): {fp32_avg / int4duq_avg:.4f}x", title="Speedup", expand=False))
 
     
 
